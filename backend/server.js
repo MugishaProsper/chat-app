@@ -1,35 +1,50 @@
-import path from "path";
 import express from "express";
-import dotenv from "dotenv";
+import http from "http";
+import cors from "cors";
 import cookieParser from "cookie-parser";
-
+import { initializeSocket } from "./socket/socket.js";
 import authRoutes from "./routes/auth.routes.js";
 import messageRoutes from "./routes/message.routes.js";
 import userRoutes from "./routes/user.routes.js";
-
 import connectToMongoDB from "./db/connectToMongoDB.js";
-import { app, server } from "./socket/socket.js";
+import dotenv from "dotenv";
 
+// Load environment variables
 dotenv.config();
 
-const __dirname = path.resolve();
-// PORT should be assigned after calling dotenv.config() because we need to access the env variables.
-const PORT = process.env.PORT || 5000;
+const app = express();
+const server = http.createServer(app);
 
-app.use(express.json()); // to parse the incoming requests with JSON payloads (from req.body)
+// Initialize Socket.IO
+const io = initializeSocket(server);
+
+// Middleware
+const corsOptions = {
+	origin: process.env.CORS_ORIGIN || "http://localhost:5173",
+	methods: ["GET", "POST", "PUT", "DELETE", "PATCH"],
+	allowedHeaders: ["Content-Type", "Authorization"],
+	credentials: true,
+	optionsSuccessStatus: 200
+};
+
+app.use(cors(corsOptions));
+app.use(express.json());
 app.use(cookieParser());
 
+// Routes
 app.use("/api/auth", authRoutes);
 app.use("/api/messages", messageRoutes);
 app.use("/api/users", userRoutes);
 
-app.use(express.static(path.join(__dirname, "/frontend/dist")));
-
-app.get("*", (req, res) => {
-	res.sendFile(path.join(__dirname, "frontend", "dist", "index.html"));
+// Error handling middleware
+app.use((err, req, res, next) => {
+	console.error("Error:", err);
+	res.status(500).json({ error: err.message || "Something went wrong!" });
 });
 
+const PORT = process.env.PORT || 5000;
+
 server.listen(PORT, () => {
+	console.log(`Server is running on port ${PORT}`);
 	connectToMongoDB();
-	console.log(`Server Running on port ${PORT}`);
 });

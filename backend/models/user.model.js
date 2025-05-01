@@ -11,6 +11,10 @@ const userSchema = new mongoose.Schema(
 			required: true,
 			unique: true,
 		},
+		email: {
+			type: String,
+			unique: true,
+		},
 		password: {
 			type: String,
 			required: true,
@@ -19,13 +23,28 @@ const userSchema = new mongoose.Schema(
 		gender: {
 			type: String,
 			required: true,
-			enum: ["male", "female"],
+			enum: ["male", "female", "other"],
 		},
 		profilePic: {
 			type: String,
 			default: "",
 		},
-		// createdAt, updatedAt => Member since <createdAt>
+		followers: [{
+			type: mongoose.Schema.Types.ObjectId,
+			ref: "User"
+		}],
+		following: [{
+			type: mongoose.Schema.Types.ObjectId,
+			ref: "User"
+		}],
+		suggestions: [{
+			type: mongoose.Schema.Types.ObjectId,
+			ref: "User"
+		}],
+		lastActive: {
+			type: Date,
+			default: Date.now
+		}
 	},
 	{ timestamps: true }
 );
