@@ -4,7 +4,6 @@ import SearchInput from "./SearchInput";
 import { useAuthContext } from "../../context/AuthContext";
 import { useState } from "react";
 import ProfilePopout from "./ProfilePopout";
-import Suggestions from "./Suggestions";
 
 const Sidebar = () => {
 	const { authUser } = useAuthContext();
@@ -57,7 +56,6 @@ const Sidebar = () => {
 					<h3 className="text-sm font-semibold text-[var(--text-secondary)] px-2 py-1">Recent Conversations</h3>
 					<Conversations />
 				</div>
-				<Suggestions />
 			</div>
 
 			<div className="p-4 border-t border-[var(--border)] bg-[var(--surface)]/80 backdrop-blur-xl sticky bottom-0 z-10">

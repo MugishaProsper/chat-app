@@ -7,18 +7,18 @@ import {
   deleteUser,
   followUser,
   unfollowUser,
-  getSuggestions
+  searchUsers
 } from "../controllers/user.controller.js";
 
 const router = express.Router();
 
 // Specific routes should come before parameterized routes
-router.get("/suggestions", protectRoute, getSuggestions);
+router.get("/search", protectRoute, searchUsers);
 router.get("/", protectRoute, getUsersForSidebar);
 router.get("/:id", protectRoute, getUserById);
-router.put("/", protectRoute, updateUser);
-router.delete("/", protectRoute, deleteUser);
-router.post("/follow/:userId", protectRoute, followUser);
-router.post("/unfollow/:userId", protectRoute, unfollowUser);
+router.put("/update", protectRoute, updateUser);
+router.delete("/delete", protectRoute, deleteUser);
+router.post("/follow/:id", protectRoute, followUser);
+router.post("/unfollow/:id", protectRoute, unfollowUser);
 
 export default router;

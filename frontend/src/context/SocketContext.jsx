@@ -1,14 +1,10 @@
-import { createContext, useState, useEffect, useContext } from "react";
+import { createContext, useContext, useState, useEffect } from "react";
 import { useAuthContext } from "./AuthContext";
 import io from "socket.io-client";
 
 const SocketContext = createContext();
 
-export const useSocketContext = () => {
-	return useContext(SocketContext);
-};
-
-export const SocketContextProvider = ({ children }) => {
+export const SocketProvider = ({ children }) => {
 	const [socket, setSocket] = useState(null);
 	const [onlineUsers, setOnlineUsers] = useState([]);
 	const { authUser } = useAuthContext();
@@ -21,12 +17,11 @@ export const SocketContextProvider = ({ children }) => {
 				},
 			});
 
-			setSocket(socket);
-
-			// socket.on() is used to listen to the events. can be used both on client and server side
 			socket.on("getOnlineUsers", (users) => {
 				setOnlineUsers(users);
 			});
+
+			setSocket(socket);
 
 			return () => socket.close();
 		} else {
@@ -37,5 +32,17 @@ export const SocketContextProvider = ({ children }) => {
 		}
 	}, [authUser]);
 
-	return <SocketContext.Provider value={{ socket, onlineUsers }}>{children}</SocketContext.Provider>;
+	return (
+		<SocketContext.Provider value={{ socket, onlineUsers }}>
+			{children}
+		</SocketContext.Provider>
+	);
+};
+
+export const useSocketContext = () => {
+	const context = useContext(SocketContext);
+	if (!context) {
+		throw new Error("useSocketContext must be used within a SocketProvider");
+	}
+	return context;
 };

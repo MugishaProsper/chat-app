@@ -15,73 +15,81 @@ export const getUsersForSidebar = async (req, res) => {
 		// Get all conversations where the current user is a participant
 		const conversations = await Conversation.find({
 			participants: loggedInUserId
-		}).populate({
-			path: 'participants',
-			match: { _id: { $ne: loggedInUserId } },
-			select: '-password -followers -following -suggestions'
-		});
-
-		// Get unique conversation participants
-		const conversationUserIds = new Set(
-			conversations.map(conv => conv.participants[0]?._id?.toString()).filter(Boolean)
-		);
+		})
+			.populate({
+				path: 'participants',
+				match: { _id: { $ne: loggedInUserId } },
+				select: 'fullName username profilePic lastActive'
+			})
+			.populate({
+				path: 'messages',
+				options: {
+					sort: { createdAt: -1 },
+					limit: 1
+				},
+				select: 'message senderId createdAt'
+			});
 
 		// Get followed users who are not in conversations
 		const followedUsers = await User.find({
-			_id: { $in: currentUser.following || [] },
-			_id: { $nin: Array.from(conversationUserIds) }
-		}).select("-password -followers -following -suggestions");
-
-		// Get suggestions (users not followed and not in conversations)
-		const suggestions = await User.aggregate([
-			{
-				$match: {
-					$and: [
-						{ _id: { $ne: loggedInUserId } },
-						{ _id: { $nin: currentUser.following || [] } },
-						{ _id: { $nin: Array.from(conversationUserIds) } }
-					]
-				}
-			},
-			{
-				$sample: { size: 5 }
-			},
-			{
-				$project: {
-					password: 0,
-					followers: 0,
-					following: 0,
-					suggestions: 0
-				}
+			_id: {
+				$in: currentUser.following,
+				$nin: conversations.map(conv => conv.participants[0]?._id)
 			}
-		]);
+		}).select("fullName username profilePic lastActive");
 
-		// Combine conversations and followed users, ensuring no duplicates
-		const sidebarUsers = [
-			...conversations.map(conv => ({
-				...conv.participants[0]?.toObject(),
+		// Process conversations to include last message
+		const conversationUsers = conversations.map(conv => {
+			const otherUser = conv.participants[0];
+			if (!otherUser) return null;
+
+			const lastMessage = conv.messages[0];
+			let lastMessageText = "No messages yet";
+
+			if (lastMessage) {
+				lastMessageText = lastMessage.senderId.equals(loggedInUserId)
+					? `You: ${lastMessage.message}`
+					: lastMessage.message;
+			}
+
+			return {
+				_id: otherUser._id,
+				fullName: otherUser.fullName,
+				username: otherUser.username,
+				profilePic: otherUser.profilePic,
+				lastActive: otherUser.lastActive,
 				conversationId: conv._id,
+				lastMessage: lastMessageText,
+				lastMessageTime: lastMessage?.createdAt,
 				unreadCount: conv.unreadCount?.get(loggedInUserId.toString()) || 0
-			})).filter(Boolean),
-			...followedUsers.map(user => ({
-				...user.toObject(),
-				conversationId: null,
-				unreadCount: 0
-			}))
-		];
+			};
+		}).filter(Boolean);
 
-		// Remove duplicates based on _id
-		const uniqueSidebarUsers = sidebarUsers.filter(
-			(user, index, self) =>
-				index === self.findIndex(u => u._id?.toString() === user._id?.toString())
-		);
+		// Format followed users who don't have conversations yet
+		const followedUsersFormatted = followedUsers.map(user => ({
+			_id: user._id,
+			fullName: user.fullName,
+			username: user.username,
+			profilePic: user.profilePic,
+			lastActive: user.lastActive,
+			conversationId: null,
+			lastMessage: "No messages yet",
+			lastMessageTime: null,
+			unreadCount: 0
+		}));
 
-		res.status(200).json({
-			sidebarUsers: uniqueSidebarUsers,
-			suggestions
-		});
+		// Combine and sort by last message time
+		const allUsers = [...conversationUsers, ...followedUsersFormatted]
+			.sort((a, b) => {
+				if (!a.lastMessageTime && !b.lastMessageTime) return 0;
+				if (!a.lastMessageTime) return 1;
+				if (!b.lastMessageTime) return -1;
+				return new Date(b.lastMessageTime) - new Date(a.lastMessageTime);
+			});
+
+		res.status(200).json(allUsers);
 	} catch (error) {
-		console.log("Error in getUsersForSidebar controller: ", error.message);
+		console.error("Error in getUsersForSidebar controller:", error);
 		res.status(500).json({ error: "Internal server error" });
 	}
 };
@@ -217,48 +225,23 @@ export const unfollowUser = async (req, res) => {
 	}
 };
 
-export const getSuggestions = async (req, res) => {
+export const searchUsers = async (req, res) => {
 	try {
-		const currentUserId = req.user._id;
-		const currentUser = await User.findById(currentUserId);
+		const { query } = req.query;
+		if (!query) {
+			return res.status(400).json({ error: "Search query is required" });
+		}
 
-		// Get all conversations where the current user is a participant
-		const conversations = await Conversation.find({
-			participants: currentUserId
-		});
+		const users = await User.find({
+			$or: [
+				{ fullName: { $regex: query, $options: "i" } },
+				{ username: { $regex: query, $options: "i" } }
+			]
+		}).select("-password -followers -following -suggestions");
 
-		// Get unique conversation participants
-		const conversationUserIds = new Set(
-			conversations.map(conv => conv.participants[0]._id.toString())
-		);
-
-		// Get users that the current user is not following and not in conversation with
-		const suggestions = await User.aggregate([
-			{
-				$match: {
-					$and: [
-						{ _id: { $ne: currentUserId } },
-						{ _id: { $nin: currentUser.following || [] } },
-						{ _id: { $nin: Array.from(conversationUserIds) } }
-					]
-				}
-			},
-			{
-				$sample: { size: 5 } // Get 5 random suggestions
-			},
-			{
-				$project: {
-					password: 0,
-					followers: 0,
-					following: 0,
-					suggestions: 0
-				}
-			}
-		]);
-
-		res.status(200).json(suggestions);
+		res.status(200).json(users);
 	} catch (error) {
-		console.log("Error in getSuggestions controller: ", error.message);
+		console.log("Error in searchUsers controller: ", error.message);
 		res.status(500).json({ error: "Internal server error" });
 	}
 };

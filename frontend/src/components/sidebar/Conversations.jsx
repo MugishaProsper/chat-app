@@ -1,47 +1,62 @@
+import { useEffect, useState } from "react";
 import Conversation from "./Conversation";
 import useGetConversations from "../../hooks/useGetConversations";
 import { useSocketContext } from "../../context/SocketContext";
 import { useAuthContext } from "../../context/AuthContext";
 
 const Conversations = () => {
-	const { loading, conversations = [] } = useGetConversations();
+	const { loading, conversations } = useGetConversations();
 	const { onlineUsers } = useSocketContext();
 	const { authUser } = useAuthContext();
+	const [searchTerm, setSearchTerm] = useState("");
 
-	if (loading) {
-		return (
-			<div className="flex flex-col gap-2">
-				{[...Array(3)].map((_, idx) => (
-					<div key={idx} className="flex items-center gap-2 p-2 rounded-lg animate-pulse">
-						<div className="w-10 h-10 rounded-full bg-[var(--primary)]/10"></div>
-						<div className="flex-1 space-y-2">
-							<div className="h-4 bg-[var(--primary)]/10 rounded w-3/4"></div>
-							<div className="h-3 bg-[var(--primary)]/10 rounded w-1/2"></div>
-						</div>
-					</div>
-				))}
-			</div>
-		);
-	}
-
-	if (!conversations.length) {
-		return (
-			<div className="flex items-center justify-center py-4">
-				<p className="text-[var(--text-secondary)]">No conversations yet</p>
-			</div>
-		);
-	}
+	// Filter conversations based on search term (only among followed users)
+	const filteredConversations = conversations?.filter((conversation) => {
+		const fullNameMatch = conversation.fullName.toLowerCase().includes(searchTerm.toLowerCase());
+		const usernameMatch = conversation.username.toLowerCase().includes(searchTerm.toLowerCase());
+		return fullNameMatch || usernameMatch;
+	});
 
 	return (
-		<div className="flex flex-col gap-2">
-			{conversations.map((conversation) => (
-				<Conversation
-					key={conversation._id}
-					conversation={conversation}
-					isSelected={conversation._id === authUser?._id}
-					onSelect={() => { }}
+		<div className="py-2 flex flex-col overflow-auto">
+			<div className="px-4 mb-2">
+				<input
+					type="text"
+					placeholder="Search your conversations..."
+					className="w-full px-4 py-2 rounded-lg bg-gray-700 text-white focus:outline-none"
+					value={searchTerm}
+					onChange={(e) => setSearchTerm(e.target.value)}
 				/>
-			))}
+			</div>
+
+			{loading ? (
+				<div className="flex justify-center items-center h-32">
+					<div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white"></div>
+				</div>
+			) : filteredConversations?.length === 0 ? (
+				<div className="text-center text-gray-400 py-4">
+					{searchTerm ? (
+						<div className="space-y-2">
+							<p>No conversations found matching "{searchTerm}"</p>
+							<p className="text-sm">Try searching for a different name or username</p>
+						</div>
+					) : (
+						<div className="space-y-2">
+							<p>No conversations yet</p>
+							<p className="text-sm">Follow users to start chatting!</p>
+						</div>
+					)}
+				</div>
+			) : (
+				<div className="flex flex-col">
+					{filteredConversations?.map((conversation) => (
+						<Conversation
+							key={conversation._id}
+							conversation={conversation}
+						/>
+					))}
+				</div>
+			)}
 		</div>
 	);
 };
